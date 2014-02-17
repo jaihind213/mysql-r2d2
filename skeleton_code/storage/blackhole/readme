@@ -1,0 +1,2 @@
+the CMakeLists has been modified to compile the code for MAC OS.
+#todo do compilation according to os
