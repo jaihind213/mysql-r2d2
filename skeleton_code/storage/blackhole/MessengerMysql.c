@@ -25,6 +25,7 @@ void invoke_on_object(JNIEnv* env, char * class_name, char * interface_class_nam
         (*env)->CallVoidMethod(env, hello_object, objectMethod, body_string, topic_string );
 
 //	env->DeleteLocalRef(config_string); //TODO 
+//     todo: cache the instances of objects created in jvm else hash code of object will change
 }
 
 
