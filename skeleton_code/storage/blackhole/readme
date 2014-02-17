@@ -1,2 +1,5 @@
-the CMakeLists has been modified to compile the code for MAC OS.
-#todo do compilation according to os
+the CMakeLists has been modified to compile the code for MAC OS. --> #todo do compilation according to os
+
+#todo: cretion of jvm code to go to open method. cache instances of java objects created in open method. 
+#todo: close method of blackhole to release mem for java objects created. Note: destroyJvm does not work.
+#todo: release local refs of jstring in create vm code 
