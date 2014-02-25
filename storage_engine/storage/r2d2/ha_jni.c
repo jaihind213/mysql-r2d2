@@ -1,7 +1,7 @@
 /* Copyright (c) todo */
 
 #include <stdio.h>
-#include "myjni.h"
+#include "ha_jni.h"
 
 //bug http://stackoverflow.com/questions/6149930/create-jvm-after-destroying-it
 

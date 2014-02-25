@@ -7,7 +7,7 @@
 #include "thr_lock.h"                           /* THR_LOCK */
 #include "handler.h"                            /* handler */
 #include "table.h"                              /* TABLE_SHARE */
-#include "myjni.h"
+#include "ha_jni.h"
 
 /*
   Shared structure for correct LOCK operation

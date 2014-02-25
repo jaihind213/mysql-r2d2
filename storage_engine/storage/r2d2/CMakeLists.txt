@@ -22,7 +22,7 @@ SET (jvm_libs "/System/Library/Frameworks/JavaVM.framework")
 SET(jni_h "/Developer/SDKs/MacOSX10.6.sdk/System/Library/Frameworks/JavaVM.framework/Versions/1.6.0/Headers")
 include_directories(${jni_h})
 
-SET(R2D2_SOURCES ha_r2d2.cc ha_r2d2.h myjni.h MessengerMysql.c)
+SET(R2D2_SOURCES ha_r2d2.cc ha_r2d2.h ha_jni.h ha_jni.c)
 
 MYSQL_ADD_PLUGIN(r2d2 ${R2D2_SOURCES} STORAGE_ENGINE)
 
