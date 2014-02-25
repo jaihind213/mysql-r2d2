@@ -8,6 +8,9 @@
 #define MYSQL_SERVER 1
 #define ENGINE_INIT_FAILED -1
 #define ENGINE_INIT_SUCCESS 0
+#define MAX_MSG_SIZE 10240
+#define MSG_PAYLOAD_COLUMN "payload"
+
 #include "sql_priv.h"
 #include "unireg.h"
 #include "probes_mysql.h"
@@ -16,9 +19,19 @@
 
 
 extern "C" {
-#include "myjni.h"
-void invoke_on_object(JNIEnv* env, char * class_name, char * interface_class_name ,char * staticMethodSign ,char * static_factory_method_name, char * object_method , char * objectMethodSignature, char * config, char * msg_body, char * topic);
-JNIEnv* create_vm(char * class_path);
+
+    JNIEnv* create_vm(char * class_path);
+
+    jclass load_class(JNIEnv* env, char * class_name );
+
+    jmethodID get_static_method(JNIEnv* env, jclass class_object,char * class_name ,char * static_method_name, char * static_method_signature )           ;
+
+    jmethodID get_object_method(JNIEnv* env, jclass class_object, char * class_name ,char * method_name, char * method_signature );
+
+    jobject call_messenger_factory_method(JNIEnv* env, char * method_name, jclass class_object, jmethodID staticMethod , char * config);
+
+    int invoke_msg_dispatch(JNIEnv* env, jobject java_object, jmethodID objectMethod, char * msg_body, char * topic );
+
 }
 
 /* Static declarations for handlerton */
@@ -36,7 +49,7 @@ static handler *r2d2_create_handler(handlerton *hton,
 static mysql_mutex_t r2d2_mutex;
 static HASH r2d2_open_tables;
 
-static st_r2d2_share *get_share(const char *table_name);
+static st_r2d2_share *get_share(const char *table_name, TABLE * table);
 static void free_share(st_r2d2_share *share);
 
 /*****************************************************************************
@@ -47,12 +60,14 @@ static void free_share(st_r2d2_share *share);
 static char*  srv_jvm_arguments_var  = ""; //has 2b set 2 something like "-Djava.class.path=/Users/vishnuhr/volume/mysql-r2d2/r2d2-java/r2d2-java/target/classes"
 //static reference to jvm env object which is created in init Method
 static JNIEnv* env = NULL;
-//
+
 
 ha_r2d2::ha_r2d2(handlerton *hton,
                            TABLE_SHARE *table_arg)
   :handler(hton, table_arg)
-{}
+{
+    buffer.set((char*)byte_buffer, IO_SIZE, &my_charset_bin);  //this buffer holds the message to be published.
+}
 
 
 static const char *ha_r2d2_exts[] = {
@@ -68,7 +83,7 @@ int ha_r2d2::open(const char *name, int mode, uint test_if_locked)
 {
   DBUG_ENTER("ha_r2d2::open");
 
-  if (!(share= get_share(name)))
+  if (!(share= get_share(name, table)))
     DBUG_RETURN(HA_ERR_OUT_OF_MEM);
 
   thr_lock_data_init(&share->lock, &lock, NULL);
@@ -86,6 +101,25 @@ int ha_r2d2::create(const char *name, TABLE *table_arg,
                          HA_CREATE_INFO *create_info)
 {
   DBUG_ENTER("ha_r2d2::create");
+  fprintf(stderr,"[R2D2] creating table with configuration(config passed via connect string): %s\n",table_arg->s->connect_string.str);
+
+  if(table_arg->s->connect_string.str == NULL || strlen(table_arg->s->connect_string.str) == 0){
+      fprintf(stderr,"[R2D2] NULL/Empty configuration passed(config passed via connect string): \n");
+      DBUG_RETURN(-1);
+
+  }
+  bool is_payload_colum_present = false;
+  for (Field **field=table_arg->field ; *field ; field++)
+  {
+        if(strcmp(MSG_PAYLOAD_COLUMN,(*field)->field_name ) == 0){
+           is_payload_colum_present = true;
+        }
+  }
+  if(!is_payload_colum_present){
+     fprintf(stderr,"[R2D2] Mandatory column '%s' for table: %s not found in create statement.\n",MSG_PAYLOAD_COLUMN,table_arg->s->table_name);
+     DBUG_RETURN(-1);
+  }
+
   DBUG_RETURN(0);
 }
 
@@ -110,108 +144,100 @@ const char *ha_r2d2::index_type(uint key_number)
                HA_KEY_ALG_RTREE) ? "RTREE" : "BTREE");
 }
 
+void ha_r2d2::retrieve_message_body(uchar * buf){
+
+    char attribute_buffer[MAX_MSG_SIZE];//10kb message max.
+    String attribute(attribute_buffer, sizeof(attribute_buffer), &my_charset_bin);
+
+    buffer.length(0); //reset it.
+
+    bool is_payload_colum_present = false;
+
+    //get the only column i.e body column
+    for (Field **field=table->field ; *field ; field++)
+    {
+            //fprintf(stderr,"creating field of table: %s\n",(*field)->field_name);
+            if(strcmp(MSG_PAYLOAD_COLUMN,(*field)->field_name ) == 0){
+               (*field)->val_str(&attribute,&attribute);
+            }
+    }
+    //Field **body_column=table->field;
+    //(*body_column)->val_str(&attribute,&attribute);
+
+    buffer.append(attribute);
+
+    if(buffer.length() > MAX_MSG_SIZE){
+        fprintf(stderr,"[Warning] Table %s with R2D2 storage engine recevied record with length >  %d. truncating data!",table->s->table_name.str, MAX_MSG_SIZE);
+    }
+}
+
+
 int ha_r2d2::write_row(uchar * buf)
 {
   DBUG_ENTER("ha_r2d2::write_row");
 
-          //JNIEnv* env = create_vm("-Djava.class.path=/Users/vishnuhr/volume/mysql-r2d2/r2d2-java/r2d2-java/target/classes");
-          JavaVM* java_vm;
-                    env->GetJavaVM(&java_vm);
-                    java_vm->AttachCurrentThread((void **)&env, NULL);
-          //JVM * jvm_share = create_vm("-Djava.class.path=/Users/vishnuhr/volume/mysql-r2d2/r2d2-java/r2d2-java/target/classes");
-          char * className = "r2d2/msg/MessengerFactory";
-          char * staticMethodName = "getMessenger";
-          char * interface_class_name = "r2d2/msg/Messenger";
-          char * objectMethodName = "dispatch";
+  if (!(share= get_share(table->s->table_name.str, table)))
+        DBUG_RETURN(HA_ERR_OUT_OF_MEM);
 
-          char * staticMethodSignature = "(Ljava/lang/String;)Lr2d2/msg/Messenger;";
-          char * objectMethodSignature = "(Ljava/lang/String;Ljava/lang/String;)V";
+  JavaVM* java_vm;
 
+  env->GetJavaVM(&java_vm);
 
-          invoke_on_object(env, className,interface_class_name ,staticMethodSignature ,staticMethodName, objectMethodName, objectMethodSignature, "type:BLACKHOLE;k:v","body","topic");
-  fprintf(stderr,"\n******** %s",buf);
-  java_vm->DetachCurrentThread();//thread done detached it with ok
+  if(java_vm->AttachCurrentThread((void **)&env, NULL) < 0)
+  {
+        fprintf(stderr,"[R2D2] Could not write row. Thread attachement to jvm env failed\n");
+        DBUG_RETURN(-1);
+  }
+  char * topic = table->s->table_name.str;
+  char * config = table->s->connect_string.str;
+
+  char * className = "r2d2/msg/MessengerFactory";
+  char * staticMethodName = "getMessenger";
+  char * interface_class_name = "r2d2/msg/Messenger";
+  char * objectMethodName = "dispatch";
+
+  char * staticMethodSignature = "(Ljava/lang/String;)Lr2d2/msg/Messenger;";
+  char * objectMethodSignature = "(Ljava/lang/String;)V";
+
+  jclass factory_class;
+  jclass interface_class;
+  jmethodID staticFactoryMethod;
+  jmethodID interfaceMethod;
+
+  retrieve_message_body(buf);
+
+  factory_class = load_class(env, className);
+  if(factory_class == NULL) { fprintf(stderr, "[R2D2]cant initialize R2D2 engine. could not load class %s! ", className); return ENGINE_INIT_FAILED;}
+
+  staticFactoryMethod = get_static_method(env,factory_class ,className ,staticMethodName,staticMethodSignature  );
+  if(staticFactoryMethod == NULL) { fprintf(stderr, "[R2D2]cant initialize R2D2 engine. could not load method %s of class %s! ", staticMethodName,className ); return ENGINE_INIT_FAILED;}
+
+  interface_class = load_class(env, interface_class_name);
+  if(interface_class == NULL) { fprintf(stderr, "[R2D2]cant initialize R2D2 engine. could not load class %s! ", interface_class_name); return ENGINE_INIT_FAILED;}
+
+  interfaceMethod = get_object_method(env, interface_class ,interface_class_name ,objectMethodName,  objectMethodSignature);
+  if(interfaceMethod == NULL) { fprintf(stderr, "[R2D2]cant initialize R2D2 engine. could not load method %s of class %s! ", objectMethodName,interface_class_name ); return ENGINE_INIT_FAILED;}
+
+  jobject messenger_object = call_messenger_factory_method(env ,staticMethodName ,factory_class, staticFactoryMethod , config);
+
+  if(messenger_object == NULL){
+     fprintf(stderr,"Failed to write_row for R2D2 table: %s, could not get instance of messenger object !!! \n",topic);
+     DBUG_RETURN(-1);
+  }
+
+  if(invoke_msg_dispatch(env, messenger_object , interfaceMethod, buffer.c_ptr(), topic ) < 0){
+     fprintf(stderr,"Failed to write_row for R2D2 table: %s, could not invoke method on messenger object !!! \n",topic);
+     DBUG_RETURN(-1);
+  }
+
+  if(java_vm->DetachCurrentThread() < 0 )//thread done detached it with ok
+  {
+     fprintf(stderr,"[R2D2].....Thread DeAttachement to jvm env failed....\n");
+     //DBUG_RETURN(-1); //dont return -1 code. if invoke on java obj succeeds. then dont return -1 else return -1
+  }
 
   DBUG_RETURN(table->next_number_field ? update_auto_increment() : 0);
 }
-
-///***
-//void parseRecord(){
-//  char values_buffer[R2D2_QUERY_BUFFER_SIZE];
-//    char insert_field_value_buffer[STRING_BUFFER_USUAL_SIZE];
-//    Field **field;
-//    uint tmp_length;
-//      int error= 0;
-//
-//    /* The string containing the values to be added to the insert */
-//      String values_string(values_buffer, sizeof(values_buffer), &my_charset_bin);
-//      /* The actual value of the field, to be added to the values_string */
-//      String insert_field_value_string(insert_field_value_buffer,
-//                                       sizeof(insert_field_value_buffer),
-//                                       &my_charset_bin);
-//
-//    my_bitmap_map *old_map= dbug_tmp_use_all_columns(table, table->read_set);
-//      DBUG_ENTER("ha_federated::write_row");
-//
-//      values_string.length(0);
-//      insert_field_value_string.length(0);
-//      /////////////////ha_statistic_increment(&SSV::ha_write_count);
-//      if (table->timestamp_field_type & TIMESTAMP_AUTO_SET_ON_INSERT)
-//        table->timestamp_field->set_time();
-//
-//  values_string.append(STRING_WITH_LEN(" ("));
-//  tmp_length= values_string.length();
-//
-//  /*
-//    loop through the field pointer array, add any fields to both the values
-//    list and the fields list that is part of the write set
-//  */
-//  for (field= table->field; *field; field++)
-//  {
-//    if (bitmap_is_set(table->write_set, (*field)->field_index))
-//    {
-//      if ((*field)->is_null())
-//        values_string.append(STRING_WITH_LEN(" NULL "));
-//      else
-//      {
-//        bool needs_quote= (*field)->str_needs_quotes();
-//        (*field)->val_str(&insert_field_value_string);
-//        if (needs_quote)
-//          values_string.append(value_quote_char);
-//        insert_field_value_string.print(&values_string);
-//        if (needs_quote)
-//          values_string.append(value_quote_char);
-//
-//        insert_field_value_string.length(0);
-//      }
-//
-//      /* append commas between both fields and fieldnames */
-//      /*
-//        unfortunately, we can't use the logic if *(fields + 1) to
-//        make the following appends conditional as we don't know if the
-//        next field is in the write set
-//      */
-//      values_string.append(STRING_WITH_LEN(", "));
-//    }
-//  }
-//  dbug_tmp_restore_column_map(table->read_set, old_map);
-//
-//  /*
-//    if there were no fields, we don't want to add a closing paren
-//    AND, we don't want to chop off the last char '('
-//    insert will be "INSERT INTO t1 VALUES ();"
-//  */
-//  if (values_string.length() > tmp_length)
-//  {
-//    /* chops off trailing comma */
-//    values_string.length(values_string.length() - sizeof_trailing_comma);
-//  }
-//  /* we always want to append this, even if there aren't any fields */
-//  values_string.append(STRING_WITH_LEN(") "));
-//}
-////////////
-
-
 
 int ha_r2d2::update_row(const uchar *old_data, uchar *new_data)
 {
@@ -429,13 +455,13 @@ int ha_r2d2::index_last(uchar * buf)
 }
 
 
-static st_r2d2_share *get_share(const char *table_name)
+static st_r2d2_share *get_share(const char *table_name, TABLE* table)
 {
   st_r2d2_share *share;
   uint length;
 
   length= (uint) strlen(table_name);
-  mysql_mutex_lock(&r2d2_mutex);
+  mysql_mutex_lock(&r2d2_mutex);   //take mutex lock
     
   if (!(share= (st_r2d2_share*)
         my_hash_search(&r2d2_open_tables,
@@ -455,9 +481,10 @@ static st_r2d2_share *get_share(const char *table_name)
       share= NULL;
       goto error;
     }
-    
+
     thr_lock_init(&share->lock);
   }
+
   share->use_count++;
   
 error:
@@ -526,6 +553,7 @@ static int r2d2_init(void *p)
   (void) my_hash_init(&r2d2_open_tables, system_charset_info,32,0,0,
                       (my_hash_get_key) r2d2_get_key,
                       (my_hash_free_key) r2d2_free_key, 0);
+
   fprintf(stderr, "[R2D2] Doing initialization of R2D2 storage engine...\n");
   fprintf(stderr, "[R2D2] r2d2_jvm_arguments_var set to '%s'\n",srv_jvm_arguments_var);
 
@@ -535,8 +563,17 @@ static int r2d2_init(void *p)
     fprintf(stderr, "[R2D2]cant initialize R2D2 engine. variable 'r2d2_jvm_arguments_var' is empty/null in your cnf ! ");
     return ENGINE_INIT_FAILED;
   }
+
   //init the jvm using jvm options. //no need for mutex over this vm creation. as init is called only once for registering the engine.
   env = create_vm(srv_jvm_arguments_var);
+  //
+
+  if(env == NULL)
+  {
+      fprintf(stderr, "[R2D2]cant initialize R2D2 engine. JVM creation failed! ");
+      return ENGINE_INIT_FAILED;
+  }
+
   fprintf(stderr, "[R2D2]Done with initialization of R2D2 storage engine.\n");
 
   return ENGINE_INIT_SUCCESS;
@@ -546,6 +583,11 @@ static int r2d2_fini(void *p)
 {
   my_hash_free(&r2d2_open_tables);
   mysql_mutex_destroy(&r2d2_mutex);
+
+  //destroy the vm. but destroying does not work due to bug.
+  //http://stackoverflow.com/questions/6149930/create-jvm-after-destroying-it
+  //DESTROY THE JVM .. but currently destroying the vm causes YOUR PROCESS to HANG
+  // http://www.velocityreviews.com/forums/t141022-destroyjavavm-never-returns.html
 
   return 0;
 }
@@ -595,6 +637,7 @@ mysql_declare_plugin_end;
   ----------
 1) empty/null srv_jvm_arguments_var paramter -> registration of engine to fail
 2) bad value of srv_jvm_arguments_var,  registration of engine to fail.
+http://stackoverflow.com/questions/2093112/why-i-should-not-reuse-a-jclass-and-or-jmethodid-in-jni
 */
 
 /*
@@ -604,4 +647,7 @@ todo:
 3) counter number of messages.
 4) per table have producer.
 5) copyright not oracle :) !!!!
+6) call stop method in jni to stop subscribers.
+7) dereference the strings in jni for garbage collection
+8)-Xcheck:jni
 */

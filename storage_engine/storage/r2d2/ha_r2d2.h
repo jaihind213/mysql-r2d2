@@ -7,6 +7,7 @@
 #include "thr_lock.h"                           /* THR_LOCK */
 #include "handler.h"                            /* handler */
 #include "table.h"                              /* TABLE_SHARE */
+#include "myjni.h"
 
 /*
   Shared structure for correct LOCK operation
@@ -27,6 +28,8 @@ class ha_r2d2: public handler
 {
   THR_LOCK_DATA lock;      /* MySQL lock */
   st_r2d2_share *share;
+  uchar byte_buffer[IO_SIZE];
+  String buffer;
 
 public:
   ha_r2d2(handlerton *hton, TABLE_SHARE *table_arg);
@@ -89,4 +92,5 @@ private:
   virtual int write_row(uchar *buf);
   virtual int update_row(const uchar *old_data, uchar *new_data);
   virtual int delete_row(const uchar *buf);
+  virtual void retrieve_message_body(uchar * buf);
 };
