@@ -57,8 +57,35 @@ How to work with this engine ?
         INFO [2014-02-26 19:47:09,789] [Thread-2] (BlackHoleProducer.java:31) - BLACK HOLE PRODUCER sending message: message body payload ,destination: bar, hashcode:1554207397
  
 
---------------------------------------------------
+
 And thats it, R2D2 has delivered your message !   
+--------------------------------------------------
+
+How about Transactions?
+-----------------------
+Its possible. by means of what i call the LEGO pattern :) 
+
+The 2 building blocks - blackhole & r2d2.
+
+have master / slave setup.
+
+on master , place block 1 i.e. have your table with engine set as 'blackhole'
+on slave , place block 2 i.e have your table with engine set as 'r2d2'
+
+when you commit on master, the binlog records the transaction, this comes to slave where the table is of engine r2d2,
+
+depending on the type of producer set in connection string, the r2d2 engine will receive the statement & table will deliver the message. 
+
+if error occurs, => replication breaks , lets say due to message queue server going on. once back up. simply run `start slave` command on slave mysql server.
+
+Todo:
+----------
+test cases -especially-> truncation of message scenario
+
+perf testing
+
+How does r2d2 send messages/connect to a message queue?
+----------------------------------------------
 
 The r2d2-java library has the neccessary classes to connect to various message queues. 
 
