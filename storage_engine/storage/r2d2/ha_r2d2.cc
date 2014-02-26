@@ -9,7 +9,19 @@
 #define ENGINE_INIT_FAILED -1
 #define ENGINE_INIT_SUCCESS 0
 #define MAX_MSG_SIZE 10240
+
 #define MSG_PAYLOAD_COLUMN "payload"
+
+#define FACTORY_CLASS "r2d2/msg/MessengerFactory"
+#define MESSENGER_GETTER_METHOD "getMessenger"
+#define MESSENGER_GETTER_METHOD_SIGNATURE "(Ljava/lang/String;)Lr2d2/msg/Messenger;"
+#define MESSENGER_DESTROY_METHOD "destroyMessenger"
+#define MESSENGER_DESTROY_METHOD_SIGNATURE "(Ljava/lang/String;)V"
+
+#define MESSENGER_INTERFACE_CLASS "r2d2/msg/Messenger"
+#define MSG_DISPATCH_METHOD "dispatch"
+#define MSG_DISPATCH_METHOD_SIGNATURE "(Ljava/lang/String;)V"
+
 
 #include "sql_priv.h"
 #include "unireg.h"
@@ -28,7 +40,9 @@ extern "C" {
 
     jmethodID get_object_method(JNIEnv* env, jclass class_object, char * class_name ,char * method_name, char * method_signature );
 
-    jobject call_messenger_factory_method(JNIEnv* env, char * method_name, jclass class_object, jmethodID staticMethod , char * config);
+    jobject call_messenger_factory_create_method(JNIEnv* env, char * method_name, jclass class_object, jmethodID staticMethod , char * config);
+
+    int call_messenger_factory_destroy_method(JNIEnv* env, char * method_name, jclass class_object, jmethodID staticMethod , char * config);
 
     int invoke_msg_dispatch(JNIEnv* env, jobject java_object, jmethodID objectMethod, char * msg_body, char * topic );
 
@@ -93,7 +107,45 @@ int ha_r2d2::open(const char *name, int mode, uint test_if_locked)
 int ha_r2d2::close(void)
 {
   DBUG_ENTER("ha_r2d2::close");
+  JavaVM* java_vm;
+
+    env->GetJavaVM(&java_vm);
+
+    if(java_vm->AttachCurrentThread((void **)&env, NULL) < 0)
+    {
+          fprintf(stderr,"[R2D2] Could not close table. Thread attachement to jvm env failed\n");
+          DBUG_RETURN(-1);
+    }
+
+  char * className = FACTORY_CLASS;
+  char * staticMethodName = MESSENGER_DESTROY_METHOD;
+  char * staticMethodSignature = MESSENGER_DESTROY_METHOD_SIGNATURE ;
+
+  jclass factory_class = load_class(env, className);
+
+  if(factory_class == NULL) {
+    fprintf(stderr, "[R2D2] TABLE CLOSE: %s - cant load factory class to destroy messenger. could not load class %s! ",table->s->table_name.str, className);
+    DBUG_RETURN(-1);
+  }
+
+  jmethodID staticFactoryMethod = get_static_method(env,factory_class ,className ,staticMethodName,staticMethodSignature  );
+  if(staticFactoryMethod == NULL) {
+    fprintf(stderr, "[R2D2] TABLE CLOSE: %s - cant load factory destroy method to destroy messenger. could not load method %s of class %s! ", table->s->table_name.str,staticMethodName,className );
+    DBUG_RETURN(-1);
+  }
+
+  fprintf(stderr,"[R2D2] TABLE CLOSE: %s - going to close messenger resources....!\n", table->s->table_name);
+  if(call_messenger_factory_destroy_method(env ,staticMethodName ,factory_class, staticFactoryMethod , table->s->connect_string.str) < 0){
+    fprintf(stderr,"[R2D2] TABLE CLOSE: %s - Tried to close messenger resources. but error occured!", table->s->table_name);
+  }
+
+  if(java_vm->DetachCurrentThread() < 0 )//thread done detached it with ok
+    {
+       fprintf(stderr,"[R2D2] Closing table.....Thread DeAttachement to jvm env failed....\n");
+       //DBUG_RETURN(-1); //dont return -1 code. if invoke on java obj succeeds. then dont return -1 else return -1
+    }
   free_share(share);
+  fprintf(stderr,"[R2D2] TABLE CLOSE: %s - done closing messenger resources!\n", table->s->table_name);
   DBUG_RETURN(0);
 }
 
@@ -191,13 +243,13 @@ int ha_r2d2::write_row(uchar * buf)
   char * topic = table->s->table_name.str;
   char * config = table->s->connect_string.str;
 
-  char * className = "r2d2/msg/MessengerFactory";
-  char * staticMethodName = "getMessenger";
-  char * interface_class_name = "r2d2/msg/Messenger";
-  char * objectMethodName = "dispatch";
+  char * className = FACTORY_CLASS;
+  char * staticMethodName = MESSENGER_GETTER_METHOD;
+  char * interface_class_name = MESSENGER_INTERFACE_CLASS;
+  char * objectMethodName = MSG_DISPATCH_METHOD ;
 
-  char * staticMethodSignature = "(Ljava/lang/String;)Lr2d2/msg/Messenger;";
-  char * objectMethodSignature = "(Ljava/lang/String;)V";
+  char * staticMethodSignature = MESSENGER_GETTER_METHOD_SIGNATURE ;
+  char * objectMethodSignature = MSG_DISPATCH_METHOD_SIGNATURE;
 
   jclass factory_class;
   jclass interface_class;
@@ -218,7 +270,7 @@ int ha_r2d2::write_row(uchar * buf)
   interfaceMethod = get_object_method(env, interface_class ,interface_class_name ,objectMethodName,  objectMethodSignature);
   if(interfaceMethod == NULL) { fprintf(stderr, "[R2D2]cant initialize R2D2 engine. could not load method %s of class %s! ", objectMethodName,interface_class_name ); return ENGINE_INIT_FAILED;}
 
-  jobject messenger_object = call_messenger_factory_method(env ,staticMethodName ,factory_class, staticFactoryMethod , config);
+  jobject messenger_object = call_messenger_factory_create_method(env ,staticMethodName ,factory_class, staticFactoryMethod , config);
 
   if(messenger_object == NULL){
      fprintf(stderr,"Failed to write_row for R2D2 table: %s, could not get instance of messenger object !!! \n",topic);
@@ -232,7 +284,7 @@ int ha_r2d2::write_row(uchar * buf)
 
   if(java_vm->DetachCurrentThread() < 0 )//thread done detached it with ok
   {
-     fprintf(stderr,"[R2D2].....Thread DeAttachement to jvm env failed....\n");
+     fprintf(stderr,"[R2D2] Writing row.....Thread DeAttachement to jvm env failed....\n");
      //DBUG_RETURN(-1); //dont return -1 code. if invoke on java obj succeeds. then dont return -1 else return -1
   }
 
@@ -574,8 +626,31 @@ static int r2d2_init(void *p)
       return ENGINE_INIT_FAILED;
   }
 
+  JavaVM* java_vm;
+
+  env->GetJavaVM(&java_vm);
+
+  if(java_vm->AttachCurrentThread((void **)&env, NULL) < 0)
+  {
+    fprintf(stderr,"[R2D2] Could not init engine. Thread attachement to jvm env failed\n");
+    DBUG_RETURN(-1);
+  }
+
+  char * className = FACTORY_CLASS;
+  jclass factory_class = load_class(env, className);
+
+  if(factory_class == NULL) {
+      //check and see if engine can load messenger factory class.
+      fprintf(stderr, "[R2D2] Could not load factory class: %s Engine registration failed!", className);
+      DBUG_RETURN(-1);
+  }
   fprintf(stderr, "[R2D2]Done with initialization of R2D2 storage engine.\n");
 
+  if(java_vm->DetachCurrentThread() < 0 )//thread done detached it with ok
+  {
+       fprintf(stderr,"[R2D2] Init Engine.....Thread DeAttachement to jvm env failed....\n");
+       //DBUG_RETURN(-1); //dont return -1 code. if invoke on java obj succeeds. then dont return -1 else return -1
+  }
   return ENGINE_INIT_SUCCESS;
 }
 

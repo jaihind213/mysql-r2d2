@@ -53,7 +53,7 @@ jmethodID get_object_method(JNIEnv* env, jclass class_object, char * class_name 
    return objectMethod;
 }
 
-jobject call_messenger_factory_method(JNIEnv* env , char * static_method_name, jclass class_object, jmethodID staticMethod , char * config){
+jobject call_messenger_factory_create_method(JNIEnv* env , char * static_method_name, jclass class_object, jmethodID staticMethod , char * config){
     jstring config_string = (*env)->NewStringUTF(env,config);
 
     jobject object = (*env)->CallStaticObjectMethod(env, class_object, staticMethod, config_string);
@@ -65,6 +65,23 @@ jobject call_messenger_factory_method(JNIEnv* env , char * static_method_name, j
     (*env)->DeleteLocalRef(env, config_string );
     return object;
 }
+
+int call_messenger_factory_destroy_method(JNIEnv* env , char * static_method_name, jclass class_object, jmethodID staticMethod , char * config){
+
+    jstring config_string = (*env)->NewStringUTF(env,config);
+
+    (*env)->CallStaticVoidMethod(env, class_object, staticMethod, config_string);
+
+    if ((*env)->ExceptionOccurred(env)){
+                  fprintf(stderr,"Error occured while calling static factory method: %s\n",static_method_name);
+                  handleError(env);
+                  return FAILURE_METHOD_INVOCATION;
+    }
+
+    (*env)->DeleteLocalRef(env, config_string );
+    return SUCCESS_METHOD_INVOCATION;
+}
+
 
 int invoke_msg_dispatch(JNIEnv* env, jobject java_object, jmethodID objectMethod, char * msg_body, char * topic ){
 
@@ -82,32 +99,6 @@ int invoke_msg_dispatch(JNIEnv* env, jobject java_object, jmethodID objectMethod
     (*env)->DeleteLocalRef(env, body_string );
 
     return SUCCESS_METHOD_INVOCATION;
-}
-
-void invoke_on_object(JNIEnv* env, char * class_name, char * interface_class_name ,char * staticMethodSign ,char * static_factory_method_name, char * object_method , char * objectMethodSignature, char * config, char * msg_body, char * topic){
-
-        jclass helloWorldClass = (*env)->FindClass(env, class_name);
-        jclass InterfaceClass = (*env)->FindClass(env, interface_class_name);
-
-        jmethodID staticMethod = (*env)->GetStaticMethodID(env, helloWorldClass, static_factory_method_name , staticMethodSign);
-
-        jmethodID objectMethod = (*env)->GetMethodID(env, InterfaceClass, object_method , objectMethodSignature);
-
-
-        jstring config_string = (*env)->NewStringUTF(env,config);
-
-        jobject hello_object = (*env)->CallStaticObjectMethod(env, helloWorldClass, staticMethod, config_string);
-
-
-        jstring body_string = (*env)->NewStringUTF(env,msg_body);
- 
-        jstring topic_string = (*env)->NewStringUTF(env,topic);
-
-        printf("\nInvoking on object calling java method from c again !\n");
-        (*env)->CallVoidMethod(env, hello_object, objectMethod, body_string, topic_string );
-
-        //	env->DeleteLocalRef(config_string); //TODO
-        // todo: cache the instances of objects created in jvm else hash code of object will change
 }
 
 /**
