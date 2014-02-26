@@ -5,6 +5,7 @@ A simple message queue storage engine for MySQL.  Inspired by r2d2 from star war
 
 
 mysql> show engines;
+
 +--------+---------+---------------------------------------------------------+--------------+----+------------+
 | Engine | Support | Comment                                                 | Transactions | XA | Savepoints |
 +--------+---------+---------------------------------------------------------+--------------+----+------------+
