@@ -1,23 +1,31 @@
 mysql-r2d2
 ==========
-A simple message queue storage engine for MySQL. [ Inspired by r2d2 from star wars :) ]
+
+A simple message queue storage engine for MySQL.  Inspired by r2d2 from star wars :)
+
 
 mysql> show engines;
-+--------------------+---------+----------------------------------------------------------------------------+--------------+------+------------+
-| Engine             | Support | Comment                                                                    | Transactions | XA   | Savepoints |
-+--------------------+---------+----------------------------------------------------------------------------+--------------+------+------------+
-| r2d2               | YES     | Interface with message queues.(may the force be with u)                    | NO           | NO   | NO         |
-+--------------------+---------+----------------------------------------------------------------------------+--------------+------+------------+
++--------+---------+---------------------------------------------------------+--------------+----+------------+
+| Engine | Support | Comment                                                 | Transactions | XA | Savepoints |
++--------+---------+---------------------------------------------------------+--------------+----+------------+
+| r2d2   | YES     | Interface with message queues.(may the force be with u) | NO           | NO | NO         |
++------- +---------+---------------------------------------------------------+--------------+----+------------+
+
 
 How to work with this engine ?
+-----------------------------
 
 (Step-1) compile the storage engine(refer build instructions). copy 'ha_r2d2.so' to directory shown by command `show variables like '%plugin%';`
 
+
 (Step-2) add following variable to my.cnf `r2d2_jvm_arguments_var="-Djava.class.path=<path_to_r2d2-java.jar>"`
+
 
 (Step-3) start mysqld server
 
+
 (Step-4) open mysql prompt & run the following: `INSTALL PLUGIN r2d2 SONAME 'ha_r2d2.so';`
+
 
 (Step-5) create table. please note the mandatory column 'payload' should be present. 
 
@@ -35,6 +43,7 @@ How to work with this engine ?
  
         Note: The delimiters for parameter tuple is SEMI_COLON and within the tuple its COLON
 
+
 (step-6) insert into foo values ('message body payload');
 	
 	The stdout of mysql should have the following:
@@ -42,7 +51,10 @@ How to work with this engine ?
         Invoking on object calling java method from c. !
         INFO [2014-02-26 19:47:09,789] [Thread-2] (BlackHoleProducer.java:31) - BLACK HOLE PRODUCER sending message: message body payload ,destination: bar, hashcode:1554207397
  
+
+--------------------------------------------------
 And thats it, R2D2 has delivered your message !   
+--------------------------------------------------
 
 The r2d2-java library has the neccessary classes to connect to various message queues. 
 https://github.com/jaihind213/r2d2-java
