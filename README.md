@@ -59,9 +59,9 @@ How to work with this engine ?
 
 --------------------------------------------------
 And thats it, R2D2 has delivered your message !   
---------------------------------------------------
 
 The r2d2-java library has the neccessary classes to connect to various message queues. 
+
 https://github.com/jaihind213/r2d2-java
 
 To implement an interface to a message queue like kafka, you need to implement the 'Messenger' interface and register it as an 'MessengerType' enum value.
