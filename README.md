@@ -24,15 +24,13 @@ How to work with this engine ?
 
 (Step-1) compile the storage engine(refer build instructions). copy 'ha_r2d2.so' to directory shown by command `show variables like '%plugin%';`
 
+(Step-2) start mysqld server
 
-(Step-2) add following variable to my.cnf `r2d2_jvm_arguments_var="-Djava.class.path=<path_to_r2d2-java.jar>"`
+(Step-3) open mysql prompt & run the following: `INSTALL PLUGIN r2d2 SONAME 'ha_r2d2.so';`
 
+         check the logs. the engine should have been registered successfully. you will also find a class not found exception! 
 
-(Step-3) start mysqld server
-
-
-(Step-4) open mysql prompt & run the following: `INSTALL PLUGIN r2d2 SONAME 'ha_r2d2.so';`
-
+(Step-4) To Fix the exception: add following variable to my.cnf `r2d2_jvm_arguments_var="-Djava.class.path=<path_to_r2d2-java.jar>"`
 
 (Step-5) create table. please note the mandatory column 'payload' should be present. 
 
