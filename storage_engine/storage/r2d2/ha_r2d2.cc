@@ -622,8 +622,9 @@ static int r2d2_init(void *p)
 
   if(factory_class == NULL) {
       //check and see if engine can load messenger factory class.
-      fprintf(stderr, "[R2D2] Could not load factory class: %s Engine registration failed!", className);
-      DBUG_RETURN(-1);
+      fprintf(stderr, "[R2D2] Warning: Could not load factory class: %s! check the r2d2_jvm_arguments_var arg for classpath! & restart server\n", className);
+      fprintf(stderr, "[R2D2] This warning is on purpose. This has been done for the initial registration of the storage engine to succeed while doing import `INSTALL PLUGIN r2d2 SONAME 'ha_r2d2.so';`\n");
+      //the above warning is logged on purpose for user to set the "r2d2_jvm_arguments_var properly". initially its empty
   }
   fprintf(stderr, "[R2D2]Done with initialization of R2D2 storage engine.\n");
 
@@ -660,7 +661,7 @@ static MYSQL_SYSVAR_STR(
   "jvm arguments for the r2d2 engine to load producer classes.",
   NULL,
   NULL,
-  "default value");
+  "-Dsome_jvm_system_variable=foobar");//setting default value of r2d2_jvm_arguments_var so init of engine passes when registration happens first time
 
 static struct st_mysql_sys_var* r2d2_system_variables[]= {
   MYSQL_SYSVAR(jvm_arguments_var),

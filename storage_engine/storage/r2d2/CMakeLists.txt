@@ -24,6 +24,6 @@ include_directories(${jni_h})
 
 SET(R2D2_SOURCES ha_r2d2.cc ha_r2d2.h ha_jni.h ha_jni.c)
 
-MYSQL_ADD_PLUGIN(r2d2 ${R2D2_SOURCES} STORAGE_ENGINE)
+MYSQL_ADD_PLUGIN(r2d2 ${R2D2_SOURCES} STORAGE_ENGINE MODULE_ONLY)
 
 TARGET_LINK_LIBRARIES(r2d2 ${jvm_libs})
