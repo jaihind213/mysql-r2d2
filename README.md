@@ -78,16 +78,10 @@ depending on the type of producer set in connection string, the r2d2 engine will
 
 if error occurs, => replication breaks , lets say due to message queue server going on. once back up. simply run `start slave` command on slave mysql server.
 
-Todo:
-----------
-test cases -especially-> truncation of message scenario
-
-perf testing
-
 How does r2d2 send messages/connect to a message queue?
 ----------------------------------------------
 
-The r2d2-java library has the neccessary classes to connect to various message queues. 
+The r2d2-java library has the neccessary classes to connect to various message queues. (used JNI) 
 
 https://github.com/jaihind213/r2d2-java
 
@@ -96,3 +90,9 @@ To implement an interface to a message queue like kafka, you need to implement t
 compile the r2d2-java project and specify the jar as jvm argument to mysql variable 'r2d2_jvm_arguments_var' in my.cnf
 
 you will notice the value for producer_type in CONNECTION String is the same you add as enum in 'MessengerType.java' 
+
+Test cases:
+-----------
+https://docs.google.com/spreadsheet/ccc?key=0Ar1-jD__Xq3qdHdRVlk4aG1PTWZIUGlXcWZia0w0ekE#gid=1
+
+
