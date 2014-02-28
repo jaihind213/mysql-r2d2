@@ -22,7 +22,7 @@ How to work with this engine ?
 
 (Step-0) compile the java producer library. refer to https://github.com/jaihind213/r2d2-java
 
-(Step-1) compile the storage engine(refer build instructions). copy 'ha_r2d2.so' to directory shown by command `show variables like '%plugin%';`
+(Step-1) compile the storage engine(refer build instructions. currently i have steps for mac). copy 'ha_r2d2.so' to directory shown by command `show variables like '%plugin%';`
 
 (Step-2) start mysqld server
 
