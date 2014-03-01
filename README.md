@@ -16,6 +16,10 @@ mysql> show engines;
 
 +------- +---------+---------------------------------------------------------+--------------+----+------------+
 
+High level design
+-----------------
+
+https://drive.google.com/file/d/0B71-jD__Xq3qVWZRVHhkb2l5MEk/edit?usp=sharing
 
 How to work with this engine ?
 -----------------------------
@@ -34,19 +38,25 @@ How to work with this engine ?
 
 (Step-5) create table. please note the mandatory column 'payload' should be present. 
 
-	create table foo(payload varchar(213))engine=r2d2  CONNECTION='producer_type:BLACKHOLE;dest_type:TOPIC;dest_name:bar;key1:value1';
+	create table foo(payload varchar(213))engine=r2d2  CONNECTION='producer_type:CONSOLE;dest_type:TOPIC;dest_name:bar;key1:value1';
 
 	Note: The connection string specifies the following:
 	
-		(a) producer_type:BLACKHOLE
-                    The type of producer, i.e. here we have blackhole producer, producing to blackhole(stdout), valid values are `BLACKHOLE` for now (TODO: Add KAFKA)
+		(a) producer_type:CONSOLE
+                    The type of producer, i.e. here we have console producer, producing to (stdout).
+                    For valid values, refer to enum `MessengerType` of the r2d2-java lib.  https://github.com/jaihind213/r2d2-java
+		   
+                    if the java lib, has an implementation for say KAFKA,then this storage engine can deliver to KAFKA. So the more 
+                    implementations of producers/messengers we have in the java lib, the power of this engine grows.
+                   
  		(b) dest_type:TOPIC 
                     The type of destination, valid values are TOPIC or QUEUE
 		(c) dest_name:bar
-                    The name of destinatin
+                    The name of destination
 	        (d) Other configuration params specified as key/value pairs i.e. key1 with value1
  
         Note: The delimiters for parameter tuple is SEMI_COLON and within the tuple its COLON
+        Note: these delimiters are defined in `ConfigConstants.java` of the r2d2-java lib.  https://github.com/jaihind213/r2d2-java  
 
 
 (step-6) insert into foo values ('message body payload');
@@ -54,7 +64,7 @@ How to work with this engine ?
 	The stdout of mysql should have the following:
 
         Invoking on object calling java method from c. !
-        INFO [2014-02-26 19:47:09,789] [Thread-2] (BlackHoleProducer.java:31) - BLACK HOLE PRODUCER sending message: message body payload ,destination: bar, hashcode:1554207397
+        INFO [2014-02-26 19:47:09,789] [Thread-2] (ConsoleProducer.java:31) - CONSOLE PRODUCER sending message: message body payload ,destination: bar, hashcode:1554207397
  
 
 
