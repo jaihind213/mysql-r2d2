@@ -21,6 +21,8 @@ High level design
 
 https://drive.google.com/file/d/0B71-jD__Xq3qVWZRVHhkb2l5MEk/edit?usp=sharing
 
+PLEASE ZOOM INTO THE IMAGE.
+
 How to work with this engine ?
 -----------------------------
 
