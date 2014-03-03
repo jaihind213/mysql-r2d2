@@ -13,13 +13,23 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 
-#SET(R2D2_SOURCES  ha_r2d2.cc ha_r2d2.h)
-#MYSQL_ADD_PLUGIN(r2d2 ${R2D2_SOURCES} STORAGE_ENGINE)
+#################################################################################
+#### note: build requires jdk. we depend on jni.h header file and other jvm libs.
+#http://lists.apple.com/archives/darwin-dev/2007/Jul/msg00080.html
 
-SET (jvm_libs "/System/Library/Frameworks/JavaVM.framework")
-###LINK_DIRECTORIES(${jvm_libs})
+# property `jni_h` = location of where jni.h header is available
+# property `jvm_libs` = location of where libserver.dylib i.e. libjvm.dylib is available
+#################################################################################
 
-SET(jni_h "/Developer/SDKs/MacOSX10.6.sdk/System/Library/Frameworks/JavaVM.framework/Versions/1.6.0/Headers")
+IF(UNIX AND NOT APPLE)
+  SET(jni_h "/usr/lib/jvm/java-6-sun/include")
+  SET(jvm_libs "/usr/lib/jvm/ia32-java-6-sun/jre/lib/i386/server")
+ELSE(APPLE)
+  SET (jvm_libs "/System/Library/Frameworks/JavaVM.framework")
+  SET(jni_h "/Developer/SDKs/MacOSX10.6.sdk/System/Library/Frameworks/JavaVM.framework/Versions/1.6.0/Headers")
+ENDIF()
+
+
 include_directories(${jni_h})
 
 SET(R2D2_SOURCES ha_r2d2.cc ha_r2d2.h ha_jni.h ha_jni.c)

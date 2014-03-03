@@ -1,3 +1,49 @@
 instructions for building:
+--------------------------
 
-//todo
+Currently supported on mac os (tested on 10.7.5 mac osx) / linux.
+
+NOTE: build requires jdk. we depend on jni.h header file and other jvm libs.
+
+http://lists.apple.com/archives/darwin-dev/2007/Jul/msg00080.html
+
+The CMakeLists file in `storage/r2d2` has the following 2 properties.
+
+1) property `jni_h` = location of where jni.h header is available
+
+2) property `jvm_libs` = location of where libserver.dylib i.e. libjvm.dylib is available
+
+Building:
+--------
+
+0) git clone git@github.com:jaihind213/mysql-r2d2.git to some directory. let it be called as R2D2_HOME
+
+1) download percona src tar ball.
+http://www.percona.com/redir/downloads/Percona-Server-5.5/Percona-Server-5.5.27-28.1/source/Percona-Server-5.5.27-rel28.1.tar.gz
+
+2) extract Percona-Server-5.5.27-rel28.1.tar.gz. It creates directory 'Percona-Server-5.5.27-rel28.1' let this be PERCONA_HOME
+
+3) mkdir -p $PERCONA_HOME/storage/r2d2
+
+4) cp -R $R2D2_HOME/storage/r2d2/* $PERCONA_HOME/storage/r2d2
+   This copies over the src and the CmakeLists.txt
+
+5) based on operating system, make sure properties `jni_h` & `jvm_libs` are set properly in $PERCONA_HOME/storage/r2d2/CmakeLists.txt
+
+6) cd $PERCONA_HOME
+
+7) 
+
+cmake . -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_CONFIG=mysql_release -DFEATURE_SET=community -DWITH_EMBEDDED_SERVER=OFF -DCMAKE_INSTALL_PREFIX=/usr/lib/mysql-r2d2/
+
+make
+
+sudo make install
+
+http://www.percona.com/doc/percona-server/5.5/installation.html#installing-percona-server-from-a-source-tarball
+
+8) note, we have mentioned a  `-DCMAKE_INSTALL_PREFIX` option while running cmake. this installs mysql here. 
+
+9) If all goes well, you should have a built `ha_r2d2.so` in $PERCONA_HOME/storage/r2d2
+
+10) time now to refer to Step1 of https://github.com/jaihind213/mysql-r2d2/blob/master/README.md
