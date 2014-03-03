@@ -38,6 +38,7 @@ How to work with this engine ?
          check the logs. the engine should have been registered successfully. you will also find a class not found exception! 
 
 (Step-4) To Fix the exception: add following variable to my.cnf `r2d2_jvm_arguments_var="-Djava.class.path=<path_to_r2d2-java.jar>"`
+         Then restart mysql. check the logs and make sure the classnotFound exception has gone.
 
 (Step-5) create table. please note the mandatory column 'payload' should be present. 
 
