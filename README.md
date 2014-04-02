@@ -92,6 +92,10 @@ depending on the type of producer set in connection string, the r2d2 engine will
 
 if error occurs, => replication breaks , lets say due to message queue server going on. once back up. simply run `start slave` command on slave mysql server.
 
+There is an edge case however -> if the server(slave running r2d2) crashes before commiting the transaction, it will replay the transaction,
+
+hence send - duplicate messages to the message queue. (* an edge case which i need to work on) 
+
 How does r2d2 send messages/connect to a message queue?
 ----------------------------------------------
 
