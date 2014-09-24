@@ -111,6 +111,5 @@ you will notice the value for producer_type in CONNECTION String is the same you
 
 Test cases:
 -----------
-https://docs.google.com/spreadsheet/ccc?key=0Ar1-jD__Xq3qdHdRVlk4aG1PTWZIUGlXcWZia0w0ekE#gid=1
-
+in progress...
 
